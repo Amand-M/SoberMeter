@@ -1,0 +1,152 @@
+import React from "react";
+import { View, Text, TouchableOpacity, FlatList, ScrollView, Alert, Platform, Dimensions } from "react-native";
+import styles from "../style";
+import Header from "./header";
+import Footer from "./footer";
+import Jauge from "./jauge";
+import * as Notifications from 'expo-notifications';
+
+class Calcul extends React.Component {
+  state = {
+    counters: [
+      { id: 1, label: "Bière", count: 0 },
+      { id: 2, label: "Vin", count: 0 },
+      { id: 3, label: "Cocktail", count: 0 },
+      { id: 4, label: "Shot", count: 0 },
+      { id: 5, label: "Champagne", count: 0 },
+      { id: 6, label: "Digestif", count: 0 },
+    ],
+    dose: 0,
+  };
+
+  componentDidMount() {
+    // Demande d'autorisation pour les notifications
+    this.registerForPushNotificationsAsync();
+  }
+
+  registerForPushNotificationsAsync = async () => {
+    let token;
+  
+    // Demande d'autorisation pour les notifications
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+    if (finalStatus !== 'granted') {
+      console.log('Failed to get push token for push notification!');
+      return;
+    }
+  
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF231F7C',
+      });
+    }
+  
+    // Récupérer le token pour l'envoi des notifications
+    token = (await Notifications.getExpoPushTokenAsync()).data;
+    console.log(token);
+  
+    return token;
+  };
+
+  handleButtonPress = (itemId) => {
+    // Update the state based on the button press
+    this.setState((prevState) => {
+      const updatedCounters = prevState.counters.map((counter) => {
+        if (counter.id === itemId) {
+          return { ...counter, count: counter.count + 1 };
+        }
+        return counter;
+      });
+      return { counters: updatedCounters };
+    });
+  };
+
+  checkNotificationThreshold = () => {
+    const { counters } = this.state;
+    const totalDrinks = counters.reduce((total, counter) => total + counter.count, 0);
+
+    if (totalDrinks % 2 === 0 && totalDrinks > 0) {
+      this.scheduleDrinkWaterNotification();
+    }
+  };
+
+  scheduleDrinkWaterNotification = async () => {
+    const notificationContent = {
+      title: 'Rappel',
+      body: 'Il est temps de boire de l\'eau !',
+      sound: 'default',
+      priority: 'high',
+    };
+
+    const schedulingOptions = {
+      content: notificationContent,
+      trigger: null, // Déclencheur immédiat
+    };
+
+    await Notifications.scheduleNotificationAsync(schedulingOptions);
+  };
+
+  renderButton = ({ item }) => {
+    return (
+      <TouchableOpacity
+        style={styles.button}
+        onPress={() => this.handleButtonPress(item.id)}
+      >
+        <Text style={styles.buttonText}>{item.label}</Text>
+        <Text style={styles.counterText}>{item.count}</Text>
+      </TouchableOpacity>
+    );
+  };
+
+  handleResetCounters = () => {
+    this.setState((prevState) => {
+      const resetCounters = prevState.counters.map((counter) => {
+        return { ...counter, count: 0 };
+      });
+      return { counters: resetCounters, dose: 0 };
+    });
+  };
+
+  render() {
+    const { dose } = this.state;
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Header />
+        </View>
+        <View style={styles.content}>
+          <Jauge value={dose} />
+          <View style={styles.buttonWrapper}>
+          <FlatList
+              data={this.state.counters}
+              renderItem={this.renderButton}
+              keyExtractor={(item) => item.id.toString()}
+              contentContainerStyle={styles.buttonContainer}
+              numColumns={3}
+            />
+
+
+            <TouchableOpacity
+              style={styles.resetButton}
+              onPress={this.handleResetCounters}
+            >
+              <Text style={styles.resetButtonText}>Remise à zéro</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        <View style={styles.footer}>
+          <Footer />
+        </View>
+      </View>
+    );
+  }
+}
+
+export default Calcul;
